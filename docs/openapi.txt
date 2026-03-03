@@ -1,0 +1,917 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "旅行计划 API",
+    "version": "0.1.0",
+    "description": "旅行计划后端 API，供前端/客户端直接对接。鉴权方式：需登录接口在请求头携带 `Authorization: Bearer <access_token>`。"
+  },
+  "servers": [
+    { "url": "http://localhost:8000", "description": "本地开发" }
+  ],
+  "tags": [
+    { "name": "健康检查", "description": "服务健康检查" },
+    { "name": "认证", "description": "注册、登录、验证码、重置密码" },
+    { "name": "逆地理编码", "description": "根据经纬度获取地址" },
+    { "name": "足迹", "description": "足迹 CRUD 与图片上传" },
+    { "name": "旅程", "description": "旅程 CRUD、封面、足迹列表与排序" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["健康检查"],
+        "summary": "健康检查",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/send-code": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "发送邮箱验证码",
+        "operationId": "sendCode",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendCodeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "422": { "description": "请求校验失败（邮箱格式不正确）" },
+          "429": { "description": "发送过于频繁，请 60 秒后再试" },
+          "500": { "description": "验证码发送失败" }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "邮箱注册",
+        "operationId": "register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功，返回 JWT 与用户信息",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+              }
+            }
+          },
+          "400": { "description": "验证码错误/过期、邮箱已注册等" },
+          "422": { "description": "请求校验失败" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "密码登录",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+              }
+            }
+          },
+          "401": { "description": "邮箱或密码错误、账号已禁用" },
+          "422": { "description": "请求校验失败" }
+        }
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "重置密码",
+        "operationId": "resetPassword",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResetPasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "description": "验证码错误/过期、邮箱未注册" },
+          "422": { "description": "请求校验失败" }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "获取当前用户信息",
+        "operationId": "getMe",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserInfo" }
+              }
+            }
+          },
+          "401": { "description": "未提供或无效的认证令牌" },
+          "403": { "description": "账号已被禁用" }
+        }
+      }
+    },
+    "/api/v1/geocode/reverse": {
+      "get": {
+        "tags": ["逆地理编码"],
+        "summary": "逆地理编码",
+        "operationId": "reverseGeocode",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "lat", "in": "query", "required": true, "schema": { "type": "number", "minimum": -90, "maximum": 90 }, "description": "纬度" },
+          { "name": "lng", "in": "query", "required": true, "schema": { "type": "number", "minimum": -180, "maximum": 180 }, "description": "经度" }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReverseGeocodeResult" }
+              }
+            }
+          },
+          "401": { "description": "未授权" }
+        }
+      }
+    },
+    "/api/v1/footprints": {
+      "post": {
+        "tags": ["足迹"],
+        "summary": "创建足迹",
+        "operationId": "createFootprint",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FootprintCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FootprintInfo" }
+              }
+            }
+          },
+          "400": { "description": "未指定旅程且无进行中的旅程等" },
+          "401": { "description": "未授权" }
+        }
+      }
+    },
+    "/api/v1/footprints/{footprint_id}": {
+      "get": {
+        "tags": ["足迹"],
+        "summary": "足迹详情",
+        "operationId": "getFootprint",
+        "parameters": [
+          { "name": "footprint_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功（含图片列表）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FootprintInfo" }
+              }
+            }
+          },
+          "403": { "description": "无权限查看" },
+          "404": { "description": "足迹不存在" }
+        }
+      },
+      "put": {
+        "tags": ["足迹"],
+        "summary": "更新足迹",
+        "operationId": "updateFootprint",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "footprint_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FootprintUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FootprintInfo" }
+              }
+            }
+          },
+          "400": { "description": "请求错误" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "足迹不存在" }
+        }
+      },
+      "delete": {
+        "tags": ["足迹"],
+        "summary": "删除足迹",
+        "operationId": "deleteFootprint",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "footprint_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "足迹不存在" }
+        }
+      }
+    },
+    "/api/v1/footprints/{footprint_id}/images": {
+      "post": {
+        "tags": ["足迹"],
+        "summary": "上传足迹图片",
+        "operationId": "uploadFootprintImage",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "footprint_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "图片文件，jpeg/png/webp，单张不超过 10MB" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FootprintImageInfo" }
+              }
+            }
+          },
+          "400": { "description": "格式或大小不符合" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" }
+        }
+      }
+    },
+    "/api/v1/travels": {
+      "post": {
+        "tags": ["旅程"],
+        "summary": "创建旅程",
+        "operationId": "createTravel",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TravelCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelInfo" }
+              }
+            }
+          },
+          "400": { "description": "请求错误" },
+          "401": { "description": "未授权" }
+        }
+      }
+    },
+    "/api/v1/travels/mine": {
+      "get": {
+        "tags": ["旅程"],
+        "summary": "我的旅程列表",
+        "operationId": "listMyTravels",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } },
+          { "name": "status", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 2 }, "description": "0-草稿 1-进行中 2-已完成" }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelListResponse" }
+              }
+            }
+          },
+          "401": { "description": "未授权" }
+        }
+      }
+    },
+    "/api/v1/travels/public": {
+      "get": {
+        "tags": ["旅程"],
+        "summary": "公开旅程列表",
+        "operationId": "listPublicTravels",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}": {
+      "get": {
+        "tags": ["旅程"],
+        "summary": "旅程详情",
+        "operationId": "getTravel",
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelInfo" }
+              }
+            }
+          },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      },
+      "put": {
+        "tags": ["旅程"],
+        "summary": "更新旅程",
+        "operationId": "updateTravel",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TravelUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelInfo" }
+              }
+            }
+          },
+          "400": { "description": "请求错误" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      },
+      "delete": {
+        "tags": ["旅程"],
+        "summary": "删除旅程",
+        "operationId": "deleteTravel",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}/status": {
+      "put": {
+        "tags": ["旅程"],
+        "summary": "更新旅程状态",
+        "operationId": "updateTravelStatus",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TravelStatusUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelInfo" }
+              }
+            }
+          },
+          "400": { "description": "请求错误" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}/cover": {
+      "post": {
+        "tags": ["旅程"],
+        "summary": "上传旅程封面",
+        "operationId": "uploadTravelCover",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "封面图片，jpeg/png/webp，不超过 5MB" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TravelInfo" }
+              }
+            }
+          },
+          "400": { "description": "格式或大小不符合" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}/view": {
+      "post": {
+        "tags": ["旅程"],
+        "summary": "浏览量 +1",
+        "operationId": "recordTravelView",
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "view_count": { "type": "integer" } }
+                }
+              }
+            }
+          },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}/footprints": {
+      "get": {
+        "tags": ["旅程"],
+        "summary": "按旅程列出足迹",
+        "operationId": "listTravelFootprints",
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "minimum": 1, "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } },
+          { "name": "order_by", "in": "query", "schema": { "type": "string", "enum": ["default", "travel_time"], "default": "default" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FootprintListResponse" }
+              }
+            }
+          },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    },
+    "/api/v1/travels/{travel_id}/footprints/reorder": {
+      "put": {
+        "tags": ["旅程"],
+        "summary": "批量排序足迹",
+        "operationId": "reorderFootprints",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "travel_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FootprintReorderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "description": "请求错误" },
+          "401": { "description": "未授权" },
+          "403": { "description": "无权限" },
+          "404": { "description": "旅程不存在" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "登录/注册后返回的 access_token，请求头：Authorization: Bearer <access_token>"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "example": "ok" } }
+      },
+      "SendCodeRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": { "email": { "type": "string", "format": "email" } }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["email", "code", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "code": { "type": "string", "minLength": 6, "maxLength": 6, "description": "邮箱验证码" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 64 },
+          "nickname": { "type": "string", "maxLength": 50 }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 64 }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["email", "code", "new_password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "code": { "type": "string", "minLength": 6, "maxLength": 6 },
+          "new_password": { "type": "string", "minLength": 6, "maxLength": 64 }
+        }
+      },
+      "UserInfo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "nickname": { "type": "string" },
+          "avatar": { "type": "string" },
+          "email": { "type": "string" },
+          "bio": { "type": "string" },
+          "is_active": { "type": "boolean" },
+          "email_verified": { "type": "boolean" },
+          "last_login_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "token_type": { "type": "string", "example": "bearer" },
+          "user": { "$ref": "#/components/schemas/UserInfo" }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": { "message": { "type": "string" } }
+      },
+      "ReverseGeocodeResult": {
+        "type": "object",
+        "properties": {
+          "location_name": { "type": "string" },
+          "address": { "type": "string" },
+          "district": { "type": "string" },
+          "city_name": { "type": "string" },
+          "province_name": { "type": "string" },
+          "country_name": { "type": "string" }
+        }
+      },
+      "FootprintCreate": {
+        "type": "object",
+        "required": ["latitude", "longitude"],
+        "properties": {
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "travel_id": { "type": "integer", "nullable": true },
+          "description": { "type": "string", "nullable": true, "maxLength": 2000 },
+          "travel_time": { "type": "string", "format": "date-time", "nullable": true },
+          "location_name": { "type": "string", "maxLength": 255 },
+          "address": { "type": "string", "maxLength": 500 },
+          "district": { "type": "string", "maxLength": 100 },
+          "city_name": { "type": "string", "maxLength": 100 },
+          "province_name": { "type": "string", "maxLength": 100 },
+          "country_name": { "type": "string", "maxLength": 100 }
+        }
+      },
+      "FootprintUpdate": {
+        "type": "object",
+        "properties": {
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "location_name": { "type": "string" },
+          "address": { "type": "string" },
+          "district": { "type": "string" },
+          "city_name": { "type": "string" },
+          "province_name": { "type": "string" },
+          "country_name": { "type": "string" },
+          "location_adjusted": { "type": "boolean" },
+          "description": { "type": "string" },
+          "travel_time": { "type": "string", "format": "date-time" },
+          "sort_order": { "type": "integer" }
+        }
+      },
+      "FootprintReorderItem": {
+        "type": "object",
+        "required": ["footprint_id", "sort_order"],
+        "properties": {
+          "footprint_id": { "type": "integer" },
+          "sort_order": { "type": "integer" }
+        }
+      },
+      "FootprintReorderRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/components/schemas/FootprintReorderItem" }
+          }
+        }
+      },
+      "FootprintImageInfo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "footprint_id": { "type": "integer" },
+          "original_url": { "type": "string" },
+          "thumbnail_url": { "type": "string" },
+          "width": { "type": "integer", "nullable": true },
+          "height": { "type": "integer", "nullable": true },
+          "size_kb": { "type": "integer", "nullable": true },
+          "sort_order": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "FootprintInfo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "travel_id": { "type": "integer" },
+          "user_id": { "type": "integer" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "location_name": { "type": "string" },
+          "address": { "type": "string" },
+          "district": { "type": "string" },
+          "city_name": { "type": "string" },
+          "province_name": { "type": "string" },
+          "country_name": { "type": "string" },
+          "location_adjusted": { "type": "boolean" },
+          "description": { "type": "string", "nullable": true },
+          "cover_thumbnail_url": { "type": "string" },
+          "image_count": { "type": "integer" },
+          "travel_time": { "type": "string", "format": "date-time", "nullable": true },
+          "sort_order": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "images": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FootprintImageInfo" }
+          }
+        }
+      },
+      "FootprintListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "travel_id": { "type": "integer" },
+          "user_id": { "type": "integer" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "location_name": { "type": "string" },
+          "address": { "type": "string" },
+          "district": { "type": "string" },
+          "city_name": { "type": "string" },
+          "province_name": { "type": "string" },
+          "country_name": { "type": "string" },
+          "location_adjusted": { "type": "boolean" },
+          "description": { "type": "string", "nullable": true },
+          "cover_thumbnail_url": { "type": "string" },
+          "image_count": { "type": "integer" },
+          "travel_time": { "type": "string", "format": "date-time", "nullable": true },
+          "sort_order": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "FootprintListResponse": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/FootprintListItem" } },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        }
+      },
+      "TravelCreate": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": { "type": "string", "nullable": true, "maxLength": 2000 },
+          "start_date": { "type": "string", "format": "date", "nullable": true },
+          "end_date": { "type": "string", "format": "date", "nullable": true },
+          "is_public": { "type": "boolean", "default": true }
+        }
+      },
+      "TravelUpdate": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "description": { "type": "string", "nullable": true, "maxLength": 2000 },
+          "start_date": { "type": "string", "format": "date", "nullable": true },
+          "end_date": { "type": "string", "format": "date", "nullable": true },
+          "is_public": { "type": "boolean" }
+        }
+      },
+      "TravelStatusUpdate": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "integer", "minimum": 0, "maximum": 2, "description": "0-草稿 1-进行中 2-已完成" }
+        }
+      },
+      "TravelInfo": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "user_id": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "cover_image_url": { "type": "string" },
+          "start_date": { "type": "string", "format": "date", "nullable": true },
+          "end_date": { "type": "string", "format": "date", "nullable": true },
+          "status": { "type": "integer" },
+          "is_public": { "type": "boolean" },
+          "view_count": { "type": "integer" },
+          "footprint_count": { "type": "integer" },
+          "image_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TravelListResponse": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/TravelInfo" } },
+          "total": { "type": "integer" },
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" }
+        }
+      },
+      "HttpValidationError": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "loc": { "type": "array", "items": {} },
+                "msg": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

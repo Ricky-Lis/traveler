@@ -1,0 +1,35 @@
+# 环境与密钥（切勿提交）
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 日志与临时文件
+*.log
+export_log.txt
+.DS_Store
+Thumbs.db
+
+# 前端（若在根目录安装）
+node_modules/

@@ -1,0 +1,178 @@
+登录页接口（供 AI 对接）
+==============================
+
+登录页所需全部接口：邮箱密码登录、发送验证码、邮箱验证码注册、忘记密码（邮箱验证码重设新密码）。
+
+----------------------------------------
+基础信息
+----------------------------------------
+
+Base URL：http://localhost:8000（生产替换为实际域名）
+内容类型：请求/响应均为 application/json
+是否需要先登录：否（以下接口均不需要 Authorization）
+
+----------------------------------------
+1. 发送邮箱验证码（注册/忘记密码前调用）
+----------------------------------------
+
+方法：POST
+路径：/api/v1/auth/send-code
+
+说明：注册或忘记密码前，先调用本接口向用户邮箱发送 6 位数字验证码；同一邮箱 60 秒内只能发送一次，验证码 5 分钟内有效。
+
+请求体（JSON）
+  字段    类型    必填  说明
+  email   string  是    邮箱（需符合邮箱格式）
+
+请求示例：
+{
+  "email": "user@example.com"
+}
+
+成功响应（200 OK）：
+{
+  "message": "验证码已发送，请查收邮箱"
+}
+
+错误响应
+  状态码  detail 示例           说明
+  429     发送过于频繁，请稍后再试  同一邮箱 60 秒内重复请求
+  500     验证码发送失败，请稍后重试  SMTP 发送失败
+  422     请求校验失败            邮箱格式错误
+
+----------------------------------------
+2. 密码登录（登录页提交）
+----------------------------------------
+
+方法：POST
+路径：/api/v1/auth/login
+
+请求体（JSON）
+  字段      类型    必填  约束        说明
+  email    string  是    邮箱格式    登录邮箱
+  password string  是    6～64 字符  登录密码
+
+请求示例：
+{
+  "email": "user@example.com",
+  "password": "mypassword123"
+}
+
+成功响应（200 OK）：
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "user": {
+    "id": 1,
+    "nickname": "旅行者",
+    "avatar": "",
+    "email": "user@example.com",
+    "bio": "",
+    "is_active": true,
+    "email_verified": true,
+    "last_login_at": "2026-02-28T10:35:00",
+    "created_at": "2026-02-28T10:30:00",
+    "updated_at": "2026-02-28T10:35:00"
+  }
+}
+
+  access_token：后续需登录的接口在请求头加 Authorization: Bearer <access_token>
+  user：当前用户信息，可直接用于登录后展示
+
+错误响应
+  状态码  detail 示例           说明
+  401     邮箱或密码错误        邮箱不存在或密码不对
+  401     该账号已被禁用        账号被禁用
+  422     请求校验失败          邮箱格式错误或密码长度不符（6～64）
+
+----------------------------------------
+3. 邮箱验证码注册
+----------------------------------------
+
+方法：POST
+路径：/api/v1/auth/register
+
+说明：先调用「发送邮箱验证码」获取验证码，再提交邮箱、验证码、密码、昵称完成注册；成功后直接返回 token 与用户信息，可视为已登录。
+
+请求体（JSON）
+  字段     类型    必填  约束          说明
+  email   string  是    邮箱格式      注册邮箱
+  code    string  是    6 位数字      邮箱收到的验证码
+  password string  是    6～64 字符    登录密码
+  nickname string  否    最长 50 字符  昵称（缺省时使用邮箱 @ 前部分）
+
+请求示例：
+{
+  "email": "newuser@example.com",
+  "code": "123456",
+  "password": "mypassword123",
+  "nickname": "新用户"
+}
+
+成功响应（200 OK）：与「密码登录」相同，返回 access_token、token_type、user。
+
+错误响应
+  状态码  detail 示例           说明
+  400     验证码已过期或未发送   未先发验证码或超过 5 分钟
+  400     验证码错误            验证码填写错误
+  400     该邮箱已注册          邮箱已被注册
+  422     请求校验失败          邮箱/验证码/密码格式或长度不符
+
+----------------------------------------
+4. 忘记密码（邮箱验证码重设新密码）
+----------------------------------------
+
+方法：POST
+路径：/api/v1/auth/reset-password
+
+说明：先调用「发送邮箱验证码」获取验证码，再提交邮箱、验证码、新密码；成功后使用新密码通过「密码登录」接口登录。
+
+请求体（JSON）
+  字段         类型    必填  约束          说明
+  email       string  是    邮箱格式      要重置密码的邮箱
+  code        string  是    6 位数字      邮箱收到的验证码
+  new_password string  是    6～64 字符    新密码
+
+请求示例：
+{
+  "email": "user@example.com",
+  "code": "654321",
+  "new_password": "newpassword456"
+}
+
+成功响应（200 OK）：
+{
+  "message": "密码重置成功，请使用新密码登录"
+}
+
+错误响应
+  状态码  detail 示例           说明
+  400     验证码已过期或未发送   未先发验证码或超过 5 分钟
+  400     验证码错误            验证码填写错误
+  400     该邮箱尚未注册        邮箱未注册，无法重置
+  422     请求校验失败          邮箱/验证码/新密码格式或长度不符
+
+----------------------------------------
+对接要点（登录页流程）
+----------------------------------------
+
+• 登录：POST /api/v1/auth/login 提交 email、password；成功则保存 access_token 和 user。
+• 注册：先 POST /api/v1/auth/send-code 发验证码 → 再 POST /api/v1/auth/register 提交 email、code、password、nickname；成功则保存 access_token 和 user。
+• 忘记密码：先 POST /api/v1/auth/send-code 发验证码 → 再 POST /api/v1/auth/reset-password 提交 email、code、new_password；成功则提示用户使用新密码去登录页登录。
+
+所有错误均通过 HTTP 状态码 + 响应体 { "detail": "错误描述" } 返回，前端可根据状态码与 detail 做统一提示。
+
+----------------------------------------
+常见错误排查（前端 401 "Missing Authorization header"）
+----------------------------------------
+
+若前端调用登录接口出现 401 且响应体为 "error": "Unauthorized: Missing Authorization header"：
+
+1) 登录/注册/发验证码/重置密码 这些接口不需要、也不应携带 Authorization 头。
+   请确认：调用 POST /api/v1/auth/login 时不要带 Authorization 头；若使用 axios/fetch 的请求拦截器统一加 Token，请把 /api/v1/auth/login、/api/v1/auth/register、/api/v1/auth/send-code、/api/v1/auth/reset-password 排除，不添加 Authorization。
+
+2) 确认请求的 URL 正确（baseURL 指向后端且路径为 /api/v1/auth/login），避免误请求到需要鉴权的接口（如 /api/v1/auth/me）。
+
+3) 若前面有反向代理或 API 网关对 /api 全部要求鉴权，需放行 /api/v1/auth/* 的登录相关接口。
+
+4) 本后端 401 时统一返回 { "detail": "错误描述" }（如 "邮箱或密码错误"），不会返回 "error" 字段；若看到 "error" 键，多半来自前端封装或中间层。
